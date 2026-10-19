@@ -244,6 +244,14 @@
       background: #FDECEC;
     }
 
+    .msg-bubble a {
+      color: #DE2A2E;
+      text-decoration: underline;
+      word-break: break-all;
+    }
+    .msg-bubble a:hover { opacity: 0.8; }
+    .msg.user .msg-bubble a { color: #fff; }
+
     .error-bubble {
       background: #FEE2E2;
       color: #991B1B;
@@ -316,6 +324,44 @@
   </div>
 
   <script>
+    // ── lightweight markdown → safe HTML ──────────────────────────────────────
+    function renderMarkdown(text) {
+      // 1. Escape HTML entities first (safety — never use innerHTML on raw text)
+      let s = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      // 2. Bold: **text** or __text__
+      s = s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/__(.*?)__/g, '<strong>$1</strong>');
+
+      // 3. Italic: *text* or _text_ (single, not already matched)
+      s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+      // 4. Clickable URLs (http:// or https://)
+      s = s.replace(
+        /(https?:\/\/[^\s<>"']+[^\s<>"'.),;:!?'])/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+      );
+
+      // 5. Bullet lists: lines starting with - or *
+      s = s.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>');
+      s = s.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+      // 6. Numbered lists
+      s = s.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+
+      // 7. Line breaks → <br>
+      s = s.replace(/\n/g, '<br>');
+
+      // 8. Clean up <br> inside list wrappers
+      s = s.replace(/<br>(<li>)/g, '$1');
+      s = s.replace(/(<\/li>)<br>/g, '$1');
+
+      return s;
+    }
+
     const history = [];
     let currentAudio = null;
     let currentSpeakBtn = null;
@@ -345,10 +391,17 @@
       btn.disabled = true;
 
       try {
+        // Strip any markdown/HTML before sending to TTS
+        const plainText = text
+          .replace(/\*\*(.*?)\*\*/g, '$1')
+          .replace(/\*(.*?)\*/g, '$1')
+          .replace(/__(.*?)__/g, '$1')
+          .replace(/https?:\/\/\S+/g, '')
+          .trim();
         const res = await fetch('/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ text: plainText })
         });
 
         if (!res.ok) throw new Error('TTS request failed');
@@ -408,7 +461,11 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'msg-bubble';
-      bubble.textContent = text;
+      if (role === 'assistant') {
+        bubble.innerHTML = renderMarkdown(text);
+      } else {
+        bubble.textContent = text;
+      }
 
       const inner = document.createElement('div');
       inner.style.display = 'flex';
