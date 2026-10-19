@@ -127,7 +127,7 @@ app.post('/tts', (req, res) => {
     .replace(/[-•]\s/g, '')
     .trim();
 
-  const body = JSON.stringify({ model: 'tts-1', voice: 'nova', input: plain });
+  const body = JSON.stringify({ model: 'tts-1', voice: 'nova', input: plain, speed: 0.85 });
 
   const options = {
     hostname: 'api.openai.com',
