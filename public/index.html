@@ -251,6 +251,29 @@
       padding: 11px 15px;
       font-size: 0.875rem;
     }
+
+    .msg-footer {
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+      padding-left: 2px;
+    }
+
+    .speak-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 15px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #69727F;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1;
+    }
+
+    .speak-btn:hover { background: #F4F7FA; color: #F97316; }
+    .speak-btn.playing { color: #F97316; }
+    .speak-btn:disabled { opacity: 0.4; cursor: default; }
   </style>
 </head>
 <body>
@@ -294,6 +317,65 @@
 
   <script>
     const history = [];
+    let currentAudio = null;
+    let currentSpeakBtn = null;
+
+    function stopCurrentAudio() {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+        currentAudio = null;
+      }
+      if (currentSpeakBtn) {
+        currentSpeakBtn.textContent = '🔊';
+        currentSpeakBtn.classList.remove('playing');
+        currentSpeakBtn.disabled = false;
+        currentSpeakBtn = null;
+      }
+    }
+
+    async function speakText(text, btn) {
+      // If this button is already playing, stop it
+      if (btn === currentSpeakBtn) { stopCurrentAudio(); return; }
+
+      // Stop any currently playing audio
+      stopCurrentAudio();
+
+      btn.textContent = '⏳';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+
+        if (!res.ok) throw new Error('TTS request failed');
+
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+
+        currentAudio   = audio;
+        currentSpeakBtn = btn;
+        btn.textContent = '⏹';
+        btn.classList.add('playing');
+        btn.disabled = false;
+
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          stopCurrentAudio();
+        };
+        audio.onerror = () => stopCurrentAudio();
+
+        await audio.play();
+      } catch (e) {
+        btn.textContent = '🔊';
+        btn.disabled = false;
+        console.error('TTS error:', e);
+      }
+    }
 
     function autoResize(el) {
       el.style.height = 'auto';
@@ -328,8 +410,25 @@
       bubble.className = 'msg-bubble';
       bubble.textContent = text;
 
+      const inner = document.createElement('div');
+      inner.style.display = 'flex';
+      inner.style.flexDirection = 'column';
+      inner.appendChild(bubble);
+
+      if (role === 'assistant') {
+        const footer = document.createElement('div');
+        footer.className = 'msg-footer';
+        const speakBtn = document.createElement('button');
+        speakBtn.className = 'speak-btn';
+        speakBtn.textContent = '🔊';
+        speakBtn.title = 'Read aloud';
+        speakBtn.onclick = () => speakText(text, speakBtn);
+        footer.appendChild(speakBtn);
+        inner.appendChild(footer);
+      }
+
       div.appendChild(avatar);
-      div.appendChild(bubble);
+      div.appendChild(inner);
       msgs.appendChild(div);
       msgs.scrollTop = msgs.scrollHeight;
       return div;

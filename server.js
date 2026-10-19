@@ -110,7 +110,60 @@ app.get('/api/categories', (req, res) => {
   res.json(cats);
 });
 
-// ── chat ──────────────────────────────────────────────────────────────────────
+// ── TTS ──────────────────────────────────────────────────────────────────────
+
+app.post('/tts', (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'No text provided' });
+
+  const apiKey = process.env.OPENAI_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
+
+  // Strip markdown so it reads naturally
+  const plain = text
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/[-•]\s/g, '')
+    .trim();
+
+  const body = JSON.stringify({ model: 'tts-1', voice: 'nova', input: plain });
+
+  const options = {
+    hostname: 'api.openai.com',
+    path: '/v1/audio/speech',
+    method: 'POST',
+    headers: {
+      'Content-Type':   'application/json',
+      'Authorization':  `Bearer ${apiKey}`,
+      'Content-Length': Buffer.byteLength(body)
+    }
+  };
+
+  const req2 = https.request(options, (r) => {
+    if (r.statusCode !== 200) {
+      let err = '';
+      r.on('data', c => err += c);
+      r.on('end', () => {
+        if (!res.headersSent) res.status(500).json({ error: 'TTS error from OpenAI' });
+      });
+      return;
+    }
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'no-store');
+    r.pipe(res);
+  });
+
+  req2.on('error', (err) => {
+    console.error('[tts error]', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'TTS failed' });
+  });
+
+  req2.write(body);
+  req2.end();
+});
+
+// ── chat ────────────────────────────────────────────────────────────────────────
 
 app.post('/chat', async (req, res) => {
   const { message, history } = req.body;
