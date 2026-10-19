@@ -193,6 +193,9 @@
   .qa-answer:focus { border-color: #DE2A2E; box-shadow: 0 0 0 3px rgba(249,115,22,0.1); }
   .qa-answer.empty { background: #fffbeb; border-color: #fcd34d; }
 
+  .img-uploading { font-size: 0.8rem; color: #6b7280; font-style: italic; padding: 4px 0; }
+  .img-preview { max-width: 100%; max-height: 180px; border-radius: 8px; margin: 6px 0; border: 1px solid #e3e8ef; display: block; }
+
   .qa-actions { display: flex; gap: 8px; align-items: center; }
   .qa-saved { font-size: 0.8rem; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
   .qa-saved.show { opacity: 1; }
@@ -369,6 +372,7 @@
           placeholder="Type the answer here…"
           onkeydown="handleKey(event, '${q.id}')"
           oninput="onAnswerInput('${q.id}')"
+          onpaste="handleImagePaste(event, '${q.id}')"
         >${esc(q.answer || '')}</textarea>
         <div class="qa-actions">
           <button class="btn btn-primary btn-sm" onclick="saveAnswer('${q.id}')">Save</button>
@@ -377,6 +381,54 @@
         </div>
       </div>
     `;
+  }
+
+  async function handleImagePaste(e, id) {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (!item.type.startsWith('image/')) continue;
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      const ta = document.getElementById('answer-' + id);
+      const insertPos = ta.selectionStart;
+
+      // Show uploading indicator
+      const before = ta.value.substring(0, insertPos);
+      const after  = ta.value.substring(insertPos);
+      ta.value = before + '\n[Uploading screenshot...]\n' + after;
+
+      // Read as base64
+      const dataUrl = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = ev => resolve(ev.target.result);
+        reader.readAsDataURL(file);
+      });
+
+      try {
+        const res = await fetch('/api/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: dataUrl })
+        });
+        const result = await res.json();
+        if (result.ok && result.url) {
+          // Replace the placeholder with the image tag
+          ta.value = ta.value.replace('\n[Uploading screenshot...]\n', `\n![screenshot](${result.url})\n`);
+          showToast('Screenshot uploaded ✓', 'success');
+        } else {
+          ta.value = ta.value.replace('\n[Uploading screenshot...]\n', '');
+          showToast('Upload failed', 'error');
+        }
+      } catch (err) {
+        ta.value = ta.value.replace('\n[Uploading screenshot...]\n', '');
+        showToast('Upload failed', 'error');
+      }
+      onAnswerInput(id);
+      return;
+    }
   }
 
   function onAnswerInput(id) {

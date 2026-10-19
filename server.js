@@ -14,6 +14,16 @@ const KB_BASE_PATH = process.env.KB_BASE_PATH
 const KB_QA_PATH = process.env.KB_QA_PATH
   || path.join(__dirname, 'kb-qa.json');
 
+// Screenshots: stored on persistent disk alongside kb-qa.json
+const SCREENSHOTS_DIR = process.env.KB_QA_PATH
+  ? path.join(path.dirname(process.env.KB_QA_PATH), 'screenshots')
+  : path.join(__dirname, 'public', 'screenshots');
+
+// Serve uploaded screenshots as static files
+app.use('/screenshots', (req, res, next) => {
+  express.static(SCREENSHOTS_DIR)(req, res, next);
+});
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function loadQA() {
@@ -108,6 +118,28 @@ app.delete('/api/qa/:id', (req, res) => {
 app.get('/api/categories', (req, res) => {
   const cats = [...new Set(loadQA().map(q => q.category).filter(Boolean))].sort();
   res.json(cats);
+});
+
+// ── image upload ─────────────────────────────────────────────────────────────────
+
+app.post('/api/upload-image', (req, res) => {
+  const { data } = req.body;
+  if (!data || typeof data !== 'string') return res.status(400).json({ error: 'No image data' });
+
+  const match = data.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!match) return res.status(400).json({ error: 'Invalid image format' });
+
+  const mime = match[1];                           // e.g. image/png
+  const ext  = mime.split('/')[1].replace('+', ''); // png, jpeg, gif, webp
+  const buf  = Buffer.from(match[2], 'base64');
+
+  if (!fs.existsSync(SCREENSHOTS_DIR)) fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+
+  const filename = `img-${Date.now()}.${ext}`;
+  const filepath = path.join(SCREENSHOTS_DIR, filename);
+  fs.writeFileSync(filepath, buf);
+
+  res.json({ ok: true, url: `/screenshots/${filename}` });
 });
 
 // ── TTS ──────────────────────────────────────────────────────────────────────
