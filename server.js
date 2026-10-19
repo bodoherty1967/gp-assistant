@@ -46,9 +46,10 @@ function buildSystemPrompt() {
   let qaSection = '';
   if (qa.length > 0) {
     qaSection =
-      '\n\n---\n\n## VERIFIED Q&A\n\n' +
-      'The following answers have been verified by the GigPost team. ' +
-      'Prefer these over anything in the base document above when they conflict.\n\n' +
+      '\n\n---\n\n## VERIFIED Q&A — USE THESE ANSWERS EXACTLY\n\n' +
+      'IMPORTANT: The following Q&A pairs have been verified by the GigPost team and are the authoritative answers. ' +
+      'When a user asks a question that matches or closely relates to one of these, respond using THIS answer — not the base document above. ' +
+      'Do not summarise, shorten, or rewrite these answers. Use them as written.\n\n' +
       qa.map(q => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n');
   }
 
