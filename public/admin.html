@@ -204,6 +204,13 @@
     border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 18px;
     text-align: center; cursor: pointer; display: none; }
   .img-thumb-wrap:hover .img-thumb-remove { display: block; }
+  .link-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
+    background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 20px; font-size: 0.78rem; }
+  .link-pill a { color: #0369a1; text-decoration: none; }
+  .link-pill a:hover { text-decoration: underline; }
+  .link-pill-remove { background: none; border: none; color: #94a3b8; cursor: pointer;
+    font-size: 11px; padding: 0 2px; line-height: 1; }
+  .link-pill-remove:hover { color: #DE2A2E; }
   .link-helper { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
   .link-input { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid #e3e8ef; border-radius: 6px; font-size: 0.78rem; color: #374151; background: #f9fafb; }
   .link-input:focus { outline: none; border-color: #DE2A2E; background: #fff; }
@@ -390,8 +397,8 @@
         >${esc(q.answer || '')}</textarea>
         <div class="img-strip" id="img-strip-${q.id}"></div>
         <div class="link-helper">
-          <input type="text" id="link-label-${q.id}" placeholder="Link label (e.g. Facebook help page)" class="link-input">
-          <input type="url"  id="link-url-${q.id}"   placeholder="https://..." class="link-input link-url">
+          <input type="text" id="link-label-${q.id}" placeholder="Link label (e.g. How to create a Facebook Page)" class="link-input">
+          <input type="url"  id="link-url-${q.id}"   placeholder="Paste the page address (e.g. https://facebook.com/help/...)" class="link-input link-url">
           <button class="btn btn-ghost btn-sm" onclick="insertLink('${q.id}')">+ Insert link</button>
         </div>
         <div class="qa-actions">
@@ -475,8 +482,11 @@
     const ta    = document.getElementById('answer-' + id);
     const strip = document.getElementById('img-strip-' + id);
     if (!strip) return;
-    const matches = [...ta.value.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)];
-    strip.innerHTML = matches.map(m => {
+    const text = ta.value;
+
+    // Image thumbnails: ![alt](url)
+    const imgMatches = [...text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)];
+    const imgHtml = imgMatches.map(m => {
       const url = m[1];
       const escapedUrl = url.replace(/"/g, '&quot;');
       const escapedMd  = m[0].replace(/"/g, '&quot;');
@@ -485,6 +495,20 @@
         <button class="img-thumb-remove" title="Remove" onclick="removeImg('${id}','${escapedMd}')">✕</button>
       </span>`;
     }).join('');
+
+    // Link pills: [label](url) — exclude images (no leading !)
+    const linkMatches = [...text.matchAll(/(?<!!)\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g)];
+    const linkHtml = linkMatches.map(m => {
+      const label = m[1];
+      const url   = m[2];
+      const escapedMd = m[0].replace(/"/g, '&quot;');
+      return `<span class="link-pill">
+        <a href="${url}" target="_blank" rel="noopener noreferrer">🔗 ${esc(label)}</a>
+        <button class="link-pill-remove" title="Remove link" onclick="removeImg('${id}','${escapedMd}')">✕</button>
+      </span>`;
+    }).join('');
+
+    strip.innerHTML = imgHtml + linkHtml;
   }
 
   function removeImg(id, md) {
