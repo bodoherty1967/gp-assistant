@@ -344,9 +344,14 @@
       s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
         '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin:8px 0;display:block;">');
 
-      // 2b. Markdown links: [text](url) — before plain URL linkification
-      s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      // 2b. Markdown links: [text](url) — extract and move to bottom as a links section
+      const extractedLinks = [];
+      s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, label, url) => {
+        extractedLinks.push({ label, url });
+        return ''; // remove inline
+      });
+      // Clean up any double spaces or orphaned punctuation left by link removal
+      s = s.replace(/[ \t]{2,}/g, ' ').replace(/^[ \t]+/gm, '').trim();
 
       // 3. Bold: **text** or __text__
       s = s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -374,6 +379,15 @@
       // 8. Clean up <br> inside list wrappers
       s = s.replace(/<br>(<li>)/g, '$1');
       s = s.replace(/(<\/li>)<br>/g, '$1');
+
+      // Append extracted links as a block at the bottom
+      if (extractedLinks.length > 0) {
+        const linkHtml = extractedLinks.map(l =>
+          `<a href="${l.url}" target="_blank" rel="noopener noreferrer" style="display:block;margin-top:6px;font-size:0.85em;">\uD83D\uDD17 ${l.label}</a>`
+        ).join('');
+        s = s.trimEnd().replace(/(<br>)+$/, '') +
+            `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.08);">${linkHtml}</div>`;
+      }
 
       return s;
     }
