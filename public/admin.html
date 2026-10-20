@@ -196,6 +196,10 @@
   .img-uploading { font-size: 0.8rem; color: #6b7280; font-style: italic; padding: 4px 0; }
   .img-preview { max-width: 100%; max-height: 180px; border-radius: 8px; margin: 6px 0; border: 1px solid #e3e8ef; display: block; }
 
+  .link-helper { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .link-input { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid #e3e8ef; border-radius: 6px; font-size: 0.78rem; color: #374151; background: #f9fafb; }
+  .link-input:focus { outline: none; border-color: #DE2A2E; background: #fff; }
+  .link-url { flex: 1.5; }
   .qa-actions { display: flex; gap: 8px; align-items: center; }
   .qa-saved { font-size: 0.8rem; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
   .qa-saved.show { opacity: 1; }
@@ -374,6 +378,11 @@
           oninput="onAnswerInput('${q.id}')"
           onpaste="handleImagePaste(event, '${q.id}')"
         >${esc(q.answer || '')}</textarea>
+        <div class="link-helper">
+          <input type="text" id="link-label-${q.id}" placeholder="Link label (e.g. Facebook help page)" class="link-input">
+          <input type="url"  id="link-url-${q.id}"   placeholder="https://..." class="link-input link-url">
+          <button class="btn btn-ghost btn-sm" onclick="insertLink('${q.id}')">+ Insert link</button>
+        </div>
         <div class="qa-actions">
           <button class="btn btn-primary btn-sm" onclick="saveAnswer('${q.id}')">Save</button>
           <button class="btn btn-ghost btn-sm" onclick="deleteQuestion('${q.id}')">Delete</button>
@@ -381,6 +390,28 @@
         </div>
       </div>
     `;
+  }
+
+  function insertLink(id) {
+    const labelEl = document.getElementById('link-label-' + id);
+    const urlEl   = document.getElementById('link-url-'   + id);
+    const ta      = document.getElementById('answer-'      + id);
+    const label   = labelEl.value.trim();
+    const url     = urlEl.value.trim();
+    if (!url) { showToast('Enter a URL first', 'error'); return; }
+    const text = label || url;
+    const md   = `[${text}](${url})`;
+    // Insert at cursor position (or append if no selection)
+    const pos    = ta.selectionStart ?? ta.value.length;
+    const before = ta.value.substring(0, pos);
+    const after  = ta.value.substring(pos);
+    const sep    = before && !before.endsWith('\n') ? ' ' : '';
+    ta.value = before + sep + md + after;
+    // Clear helper fields
+    labelEl.value = '';
+    urlEl.value   = '';
+    ta.focus();
+    onAnswerInput(id);
   }
 
   async function handleImagePaste(e, id) {
