@@ -4,7 +4,7 @@ const path    = require('path');
 const https   = require('https');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── paths (env vars allow Render persistent disk override) ────────────────────

@@ -196,6 +196,9 @@
   .img-uploading { font-size: 0.8rem; color: #6b7280; font-style: italic; padding: 4px 0; }
   .img-preview { max-width: 100%; max-height: 180px; border-radius: 8px; margin: 6px 0; border: 1px solid #e3e8ef; display: block; }
 
+  .screenshot-helper { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .screenshot-btn { cursor: pointer; }
+  .screenshot-hint { font-size: 0.75rem; color: #9ca3af; }
   .link-helper { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
   .link-input { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid #e3e8ef; border-radius: 6px; font-size: 0.78rem; color: #374151; background: #f9fafb; }
   .link-input:focus { outline: none; border-color: #DE2A2E; background: #fff; }
@@ -378,6 +381,13 @@
           oninput="onAnswerInput('${q.id}')"
           onpaste="handleImagePaste(event, '${q.id}')"
         >${esc(q.answer || '')}</textarea>
+        <div class="screenshot-helper">
+          <label class="btn btn-ghost btn-sm screenshot-btn">
+            📷 Add screenshot
+            <input type="file" accept="image/*" style="display:none" onchange="handleFileUpload(event, '${q.id}')">
+          </label>
+          <span class="screenshot-hint">or paste an image into the answer box</span>
+        </div>
         <div class="link-helper">
           <input type="text" id="link-label-${q.id}" placeholder="Link label (e.g. Facebook help page)" class="link-input">
           <input type="url"  id="link-url-${q.id}"   placeholder="https://..." class="link-input link-url">
@@ -414,6 +424,46 @@
     onAnswerInput(id);
   }
 
+  async function uploadImageDataUrl(dataUrl, id) {
+    const ta = document.getElementById('answer-' + id);
+    const pos = ta.selectionStart ?? ta.value.length;
+    const before = ta.value.substring(0, pos);
+    const after  = ta.value.substring(pos);
+    const sep = before && !before.endsWith('\n') ? '\n' : '';
+    ta.value = before + sep + '[Uploading screenshot...]\n' + after;
+    try {
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: dataUrl })
+      });
+      const result = await res.json();
+      if (result.ok && result.url) {
+        ta.value = ta.value.replace('[Uploading screenshot...]\n', `![screenshot](${result.url})\n`);
+        showToast('Screenshot added ✓', 'success');
+      } else {
+        ta.value = ta.value.replace(sep + '[Uploading screenshot...]\n', '');
+        showToast('Upload failed: ' + (result.error || 'unknown error'), 'error');
+      }
+    } catch (err) {
+      ta.value = ta.value.replace(sep + '[Uploading screenshot...]\n', '');
+      showToast('Upload failed — ' + err.message, 'error');
+    }
+    onAnswerInput(id);
+  }
+
+  async function handleFileUpload(e, id) {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const dataUrl = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target.result);
+      reader.readAsDataURL(file);
+    });
+    e.target.value = ''; // reset picker
+    await uploadImageDataUrl(dataUrl, id);
+  }
+
   async function handleImagePaste(e, id) {
     const items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
@@ -422,42 +472,12 @@
       e.preventDefault();
       const file = item.getAsFile();
       if (!file) continue;
-
-      const ta = document.getElementById('answer-' + id);
-      const insertPos = ta.selectionStart;
-
-      // Show uploading indicator
-      const before = ta.value.substring(0, insertPos);
-      const after  = ta.value.substring(insertPos);
-      ta.value = before + '\n[Uploading screenshot...]\n' + after;
-
-      // Read as base64
       const dataUrl = await new Promise(resolve => {
         const reader = new FileReader();
         reader.onload = ev => resolve(ev.target.result);
         reader.readAsDataURL(file);
       });
-
-      try {
-        const res = await fetch('/api/upload-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: dataUrl })
-        });
-        const result = await res.json();
-        if (result.ok && result.url) {
-          // Replace the placeholder with the image tag
-          ta.value = ta.value.replace('\n[Uploading screenshot...]\n', `\n![screenshot](${result.url})\n`);
-          showToast('Screenshot uploaded ✓', 'success');
-        } else {
-          ta.value = ta.value.replace('\n[Uploading screenshot...]\n', '');
-          showToast('Upload failed', 'error');
-        }
-      } catch (err) {
-        ta.value = ta.value.replace('\n[Uploading screenshot...]\n', '');
-        showToast('Upload failed', 'error');
-      }
-      onAnswerInput(id);
+      await uploadImageDataUrl(dataUrl, id);
       return;
     }
   }
