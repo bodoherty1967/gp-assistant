@@ -196,12 +196,14 @@
   .img-uploading { font-size: 0.8rem; color: #6b7280; font-style: italic; padding: 4px 0; }
   .img-preview { max-width: 100%; max-height: 180px; border-radius: 8px; margin: 6px 0; border: 1px solid #e3e8ef; display: block; }
 
-  .paste-zone { display: flex; align-items: center; justify-content: center; margin-bottom: 6px;
-    height: 36px; border: 2px dashed #d1d5db; border-radius: 8px; font-size: 0.8rem;
-    color: #9ca3af; cursor: pointer; transition: border-color 0.15s, color 0.15s, background 0.15s;
-    user-select: none; outline: none; }
-  .paste-zone:hover { border-color: #DE2A2E; color: #DE2A2E; }
-  .paste-zone-active { border-color: #DE2A2E !important; color: #DE2A2E !important; background: #fef2f2; }
+  .img-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+  .img-strip:empty { display: none; }
+  .img-thumb-wrap { position: relative; display: inline-block; }
+  .img-thumb-wrap img { height: 72px; border-radius: 6px; border: 1px solid #e3e8ef; display: block; cursor: pointer; }
+  .img-thumb-remove { position: absolute; top: -6px; right: -6px; background: #DE2A2E; color: white;
+    border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 18px;
+    text-align: center; cursor: pointer; display: none; }
+  .img-thumb-wrap:hover .img-thumb-remove { display: block; }
   .link-helper { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
   .link-input { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid #e3e8ef; border-radius: 6px; font-size: 0.78rem; color: #374151; background: #f9fafb; }
   .link-input:focus { outline: none; border-color: #DE2A2E; background: #fff; }
@@ -361,6 +363,8 @@
         ${qs.map(q => renderCard(q)).join('')}
       </div>
     `).join('');
+    // Render image strips for any answers that already contain screenshots
+    filtered.forEach(q => renderImgStrip(q.id));
   }
 
   function renderCard(q) {
@@ -384,13 +388,7 @@
           oninput="onAnswerInput('${q.id}')"
           onpaste="handleImagePaste(event, '${q.id}')"
         >${esc(q.answer || '')}</textarea>
-        <div class="paste-zone" id="paste-zone-${q.id}" tabindex="0"
-             onclick="this.focus()"
-             onpaste="handleZonePaste(event, '${q.id}')"
-             onfocus="this.classList.add('paste-zone-active')"
-             onblur="this.classList.remove('paste-zone-active')">
-          📸 Paste screenshot here
-        </div>
+        <div class="img-strip" id="img-strip-${q.id}"></div>
         <div class="link-helper">
           <input type="text" id="link-label-${q.id}" placeholder="Link label (e.g. Facebook help page)" class="link-input">
           <input type="url"  id="link-url-${q.id}"   placeholder="https://..." class="link-input link-url">
@@ -455,27 +453,6 @@
     onAnswerInput(id);
   }
 
-  async function handleZonePaste(e, id) {
-    e.preventDefault();
-    const items = e.clipboardData && e.clipboardData.items;
-    if (!items) return;
-    for (const item of Array.from(items)) {
-      if (!item.type.startsWith('image/')) continue;
-      const zone = document.getElementById('paste-zone-' + id);
-      zone.textContent = 'Uploading…';
-      const file = item.getAsFile();
-      const dataUrl = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = ev => resolve(ev.target.result);
-        reader.readAsDataURL(file);
-      });
-      await uploadImageDataUrl(dataUrl, id);
-      zone.textContent = '📸 Paste screenshot here';
-      return;
-    }
-    showToast('No image found in clipboard', 'error');
-  }
-
   async function handleImagePaste(e, id) {
     const items = e.clipboardData && e.clipboardData.items;
     if (!items) return;
@@ -494,6 +471,28 @@
     }
   }
 
+  function renderImgStrip(id) {
+    const ta    = document.getElementById('answer-' + id);
+    const strip = document.getElementById('img-strip-' + id);
+    if (!strip) return;
+    const matches = [...ta.value.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)];
+    strip.innerHTML = matches.map(m => {
+      const url = m[1];
+      const escapedUrl = url.replace(/"/g, '&quot;');
+      const escapedMd  = m[0].replace(/"/g, '&quot;');
+      return `<span class="img-thumb-wrap">
+        <img src="${escapedUrl}" title="Click to open" onclick="window.open('${escapedUrl}','_blank')">
+        <button class="img-thumb-remove" title="Remove" onclick="removeImg('${id}','${escapedMd}')">✕</button>
+      </span>`;
+    }).join('');
+  }
+
+  function removeImg(id, md) {
+    const ta = document.getElementById('answer-' + id);
+    ta.value = ta.value.replace(md, '').replace(/\n{3,}/g, '\n\n').trim();
+    onAnswerInput(id);
+  }
+
   function onAnswerInput(id) {
     const ta = document.getElementById('answer-' + id);
     if (ta.value.trim()) {
@@ -501,6 +500,7 @@
     } else {
       ta.classList.add('empty');
     }
+    renderImgStrip(id);
   }
 
   function handleKey(e, id) {
