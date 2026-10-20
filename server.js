@@ -196,6 +196,37 @@ app.post('/tts', (req, res) => {
   req2.end();
 });
 
+// ── KB exact matching ───────────────────────────────────────────────────────────
+
+function tokenize(text) {
+  return new Set(
+    text.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2)
+  );
+}
+
+function jaccardSimilarity(q1, q2) {
+  const a = tokenize(q1);
+  const b = tokenize(q2);
+  const intersection = [...a].filter(w => b.has(w)).length;
+  const union = new Set([...a, ...b]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function findBestKBMatch(question, qa) {
+  let best = null;
+  let bestScore = 0;
+  for (const entry of qa) {
+    if (!entry.answer || !entry.answer.trim()) continue;
+    const score = jaccardSimilarity(question, entry.question);
+    if (score > bestScore) { bestScore = score; best = entry; }
+  }
+  // Require at least 35% word overlap to trust the match
+  return bestScore >= 0.35 ? best : null;
+}
+
 // ── chat ────────────────────────────────────────────────────────────────────────
 
 app.post('/chat', async (req, res) => {
@@ -205,6 +236,15 @@ app.post('/chat', async (req, res) => {
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
 
+  // ── Step 1: Try to find an exact KB match and return it verbatim ──────────────
+  const qa = loadQA().filter(q => q.answer && q.answer.trim());
+  const kbMatch = findBestKBMatch(message, qa);
+  if (kbMatch) {
+    console.log(`[chat] KB match found (id=${kbMatch.id}) — returning verbatim answer`);
+    return res.json({ reply: kbMatch.answer });
+  }
+
+  // ── Step 2: No strong KB match — fall through to GPT ────────────────────────
   const systemPrompt = buildSystemPrompt();
 
   const messages = [

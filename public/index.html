@@ -344,6 +344,10 @@
       s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
         '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin:8px 0;display:block;">');
 
+      // 2b. Markdown links: [text](url) — before plain URL linkification
+      s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
       // 3. Bold: **text** or __text__
       s = s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       s = s.replace(/__(.*?)__/g, '<strong>$1</strong>');
@@ -351,9 +355,9 @@
       // 3. Italic: *text* or _text_ (single, not already matched)
       s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
 
-      // 4. Clickable URLs (http:// or https://)
+      // 4. Clickable bare URLs (http:// or https://) — skip ones already inside an href
       s = s.replace(
-        /(https?:\/\/[^\s<>"']+[^\s<>"'.),;:!?'])/g,
+        /(?<!["'=])(https?:\/\/[^\s<>"']+[^\s<>"'.),;:!?'])/g,
         '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
       );
 
