@@ -215,6 +215,8 @@
   .link-input { flex: 1; min-width: 120px; padding: 5px 8px; border: 1px solid #e3e8ef; border-radius: 6px; font-size: 0.78rem; color: #374151; background: #f9fafb; }
   .link-input:focus { outline: none; border-color: #DE2A2E; background: #fff; }
   .link-url { flex: 1.5; }
+  .qa-num { font-size: 0.72rem; font-weight: 700; color: #9ca3af; background: #f3f4f6;
+    border-radius: 4px; padding: 2px 6px; flex-shrink: 0; letter-spacing: 0.02em; }
   .qa-actions { display: flex; gap: 8px; align-items: center; }
   .qa-saved { font-size: 0.8rem; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
   .qa-saved.show { opacity: 1; }
@@ -384,6 +386,7 @@
     return `
       <div class="qa-card ${cardClass}" id="card-${q.id}">
         <div class="qa-top">
+          <span class="qa-num">#${q.qNum || '?'}</span>
           <div class="qa-question">${esc(q.question)}</div>
           <span class="status-badge ${statusClass}" id="badge-${q.id}">${statusLabel}</span>
         </div>

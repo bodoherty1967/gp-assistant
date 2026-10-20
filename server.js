@@ -28,8 +28,16 @@ app.use('/screenshots', (req, res, next) => {
 
 function loadQA() {
   if (!fs.existsSync(KB_QA_PATH)) return [];
-  try { return JSON.parse(fs.readFileSync(KB_QA_PATH, 'utf8')); }
+  let qa;
+  try { qa = JSON.parse(fs.readFileSync(KB_QA_PATH, 'utf8')); }
   catch (e) { console.error('kb-qa.json parse error:', e.message); return []; }
+  // One-time migration: assign stable qNum to any entries that lack one
+  const maxNum = qa.reduce((m, q) => Math.max(m, q.qNum || 0), 0);
+  let changed = false;
+  let next = maxNum + 1;
+  qa.forEach(q => { if (!q.qNum) { q.qNum = next++; changed = true; } });
+  if (changed) saveQA(qa);
+  return qa;
 }
 
 function saveQA(qa) {
@@ -76,9 +84,12 @@ app.post('/api/qa', (req, res) => {
   const { question, answer, category } = req.body;
   if (!question || !question.trim()) return res.status(400).json({ error: 'Question is required' });
   const qa = loadQA();
+  const qa2 = loadQA();
+  const nextNum = qa2.reduce((m, q) => Math.max(m, q.qNum || 0), 0) + 1;
   const id  = 'q' + Date.now();
   const entry = {
     id,
+    qNum: nextNum,
     category: (category || 'General').trim(),
     question: question.trim(),
     answer:   (answer || '').trim(),
