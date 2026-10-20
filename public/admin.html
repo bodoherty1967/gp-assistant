@@ -363,20 +363,21 @@
       groups[cat].push(q);
     });
 
+    let __cardIdx = 0;
     container.innerHTML = Object.entries(groups).map(([cat, qs]) => `
       <div class="category-section">
         <div class="category-header">
           ${esc(cat)}
           <span class="category-count">${qs.filter(q=>q.answer&&q.answer.trim()).length}/${qs.length} answered</span>
         </div>
-        ${qs.map(q => renderCard(q)).join('')}
+        ${qs.map(q => renderCard(q, ++__cardIdx)).join('')}
       </div>
     `).join('');
     // Render image strips for any answers that already contain screenshots
     filtered.forEach(q => renderImgStrip(q.id));
   }
 
-  function renderCard(q) {
+  function renderCard(q, displayNum) {
     const hasAnswer = q.answer && q.answer.trim();
     const statusClass = hasAnswer ? 'status-verified' : 'status-needs-input';
     const statusLabel = hasAnswer ? '✓ Answered' : '? Needs answer';
@@ -386,7 +387,7 @@
     return `
       <div class="qa-card ${cardClass}" id="card-${q.id}">
         <div class="qa-top">
-          <span class="qa-num">#${q.qNum || '?'}</span>
+          <span class="qa-num">#${displayNum}</span>
           <div class="qa-question">${esc(q.question)}</div>
           <span class="status-badge ${statusClass}" id="badge-${q.id}">${statusLabel}</span>
         </div>
