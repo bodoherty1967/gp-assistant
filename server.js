@@ -19,6 +19,15 @@ const SCREENSHOTS_DIR = process.env.KB_QA_PATH
   ? path.join(path.dirname(process.env.KB_QA_PATH), 'screenshots')
   : path.join(__dirname, 'public', 'screenshots');
 
+// Embeddings: stored alongside kb-qa.json
+const EMBEDDINGS_PATH = process.env.KB_QA_PATH
+  ? path.join(path.dirname(process.env.KB_QA_PATH), 'kb-embeddings.json')
+  : path.join(__dirname, 'kb-embeddings.json');
+
+// Embedding matching config
+const EMBED_THRESHOLD = 0.82;   // minimum cosine similarity to consider a match
+const EMBED_MARGIN    = 0.08;   // top match must beat 2nd-best by this much
+
 // Serve uploaded screenshots as static files
 app.use('/screenshots', (req, res, next) => {
   express.static(SCREENSHOTS_DIR)(req, res, next);
@@ -99,6 +108,9 @@ app.post('/api/qa', (req, res) => {
   qa.push(entry);
   saveQA(qa);
   res.json({ ok: true, entry });
+  // Compute embedding in background (don't block the response)
+  const apiKey = process.env.OPENAI_KEY;
+  if (apiKey) embedEntry(entry, apiKey).catch(() => {});
 });
 
 app.put('/api/qa/:id', (req, res) => {
@@ -117,6 +129,9 @@ app.put('/api/qa/:id', (req, res) => {
   qa[idx] = updated;
   saveQA(qa);
   res.json({ ok: true, entry: updated });
+  // Re-embed if the question text changed
+  const apiKey = process.env.OPENAI_KEY;
+  if (apiKey) embedEntry(updated, apiKey).catch(() => {});
 });
 
 app.delete('/api/qa/:id', (req, res) => {
@@ -207,35 +222,86 @@ app.post('/tts', (req, res) => {
   req2.end();
 });
 
-// ── KB exact matching ───────────────────────────────────────────────────────────
+// ── Embeddings helpers ───────────────────────────────────────────────────────
 
-function tokenize(text) {
-  return new Set(
-    text.toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 2)
-  );
+function loadEmbeddings() {
+  if (!fs.existsSync(EMBEDDINGS_PATH)) return {};
+  try { return JSON.parse(fs.readFileSync(EMBEDDINGS_PATH, 'utf8')); }
+  catch (e) { console.error('kb-embeddings.json parse error:', e.message); return {}; }
 }
 
-function jaccardSimilarity(q1, q2) {
-  const a = tokenize(q1);
-  const b = tokenize(q2);
-  const intersection = [...a].filter(w => b.has(w)).length;
-  const union = new Set([...a, ...b]).size;
-  return union === 0 ? 0 : intersection / union;
+function saveEmbeddings(embs) {
+  const dir = path.dirname(EMBEDDINGS_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(EMBEDDINGS_PATH, JSON.stringify(embs));
 }
 
-function findBestKBMatch(question, qa) {
-  let best = null;
-  let bestScore = 0;
-  for (const entry of qa) {
-    if (!entry.answer || !entry.answer.trim()) continue;
-    const score = jaccardSimilarity(question, entry.question);
-    if (score > bestScore) { bestScore = score; best = entry; }
+function cosine(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] ** 2; nb += b[i] ** 2; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+
+async function openaiEmbed(text, apiKey) {
+  const body = JSON.stringify({ model: 'text-embedding-3-small', input: text.slice(0, 2000) });
+  const data = await new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.openai.com',
+      path: '/v1/embeddings',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, r => {
+      let raw = '';
+      r.on('data', c => raw += c);
+      r.on('end', () => { try { resolve(JSON.parse(raw)); } catch(e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+  if (!data.data || !data.data[0]) throw new Error('Embedding API error: ' + JSON.stringify(data));
+  return data.data[0].embedding;
+}
+
+// Find best KB match using semantic embeddings.
+// Returns { entry, score } or null.
+// Safety rule: top score must clear EMBED_THRESHOLD *and* beat 2nd-best by EMBED_MARGIN.
+async function findBestKBMatchEmbed(question, qa, apiKey) {
+  const embeddings = loadEmbeddings();
+  const candidates = qa.filter(q => q.answer && q.answer.trim() && embeddings[q.id]);
+  if (candidates.length === 0) return null;
+
+  const qEmbed = await openaiEmbed(question, apiKey);
+
+  const scored = candidates
+    .map(entry => ({ entry, score: cosine(qEmbed, embeddings[entry.id]) }))
+    .sort((a, b) => b.score - a.score);
+
+  const top    = scored[0];
+  const second = scored[1];
+
+  // Must clear threshold
+  if (top.score < EMBED_THRESHOLD) return null;
+  // Must beat runner-up by a safe margin (guards near-twin questions)
+  if (second && (top.score - second.score) < EMBED_MARGIN) return null;
+
+  return top;
+}
+
+// Compute + store embedding for a single QA entry (fire-and-forget on save)
+async function embedEntry(entry, apiKey) {
+  if (!entry.question) return;
+  try {
+    const embs = loadEmbeddings();
+    embs[entry.id] = await openaiEmbed(entry.question, apiKey);
+    saveEmbeddings(embs);
+  } catch (e) {
+    console.error(`[embed] Failed for ${entry.id}:`, e.message);
   }
-  // Require at least 35% word overlap to trust the match
-  return bestScore >= 0.35 ? best : null;
 }
 
 // ── chat ────────────────────────────────────────────────────────────────────────
@@ -247,12 +313,16 @@ app.post('/chat', async (req, res) => {
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
 
-  // ── Step 1: Try to find an exact KB match and return it verbatim ──────────────
+  // ── Step 1: Semantic KB match — return verbatim if confident ─────────────────
   const qa = loadQA().filter(q => q.answer && q.answer.trim());
-  const kbMatch = findBestKBMatch(message, qa);
-  if (kbMatch) {
-    console.log(`[chat] KB match found (id=${kbMatch.id}) — returning verbatim answer`);
-    return res.json({ reply: kbMatch.answer });
+  try {
+    const kbMatch = await findBestKBMatchEmbed(message, qa, apiKey);
+    if (kbMatch) {
+      console.log(`[chat] Embed match id=${kbMatch.entry.id} score=${kbMatch.score.toFixed(3)} — verbatim`);
+      return res.json({ reply: kbMatch.entry.answer });
+    }
+  } catch (e) {
+    console.error('[chat] Embed match error (falling through to GPT):', e.message);
   }
 
   // ── Step 2: No strong KB match — fall through to GPT ────────────────────────
@@ -303,6 +373,43 @@ app.post('/chat', async (req, res) => {
     console.error('[chat error]', err.message);
     res.status(500).json({ error: 'Something went wrong — try again.' });
   }
+});
+
+// ── Embed backfill ────────────────────────────────────────────────────────────
+// POST /api/embed-all  — one-time job to embed all existing questions
+// Call once after deploy; subsequent saves auto-embed.
+app.get('/api/embed-status', (req, res) => {
+  const qa   = loadQA().filter(q => q.answer && q.answer.trim());
+  const embs = loadEmbeddings();
+  const embedded = qa.filter(q => embs[q.id]).length;
+  res.json({ total: qa.length, embedded, missing: qa.length - embedded });
+});
+
+app.post('/api/embed-all', async (req, res) => {
+  const apiKey = process.env.OPENAI_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY' });
+  const qa   = loadQA().filter(q => q.question && q.answer && q.answer.trim());
+  const embs = loadEmbeddings();
+  const todo = qa.filter(q => !embs[q.id]);
+  if (todo.length === 0) return res.json({ ok: true, embedded: 0, message: 'All already embedded' });
+
+  res.json({ ok: true, total: todo.length, message: `Embedding ${todo.length} questions in background…` });
+
+  // Process sequentially to avoid rate limits
+  let done = 0;
+  for (const entry of todo) {
+    try {
+      const fresh = loadEmbeddings();
+      fresh[entry.id] = await openaiEmbed(entry.question, apiKey);
+      saveEmbeddings(fresh);
+      done++;
+      if (done % 10 === 0) console.log(`[embed-all] ${done}/${todo.length}`);
+      await new Promise(r => setTimeout(r, 120)); // ~8 req/s, well within rate limit
+    } catch (e) {
+      console.error(`[embed-all] Failed ${entry.id}:`, e.message);
+    }
+  }
+  console.log(`[embed-all] Done: ${done}/${todo.length}`);
 });
 
 // ── start ─────────────────────────────────────────────────────────────────────
