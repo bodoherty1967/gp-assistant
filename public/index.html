@@ -244,13 +244,54 @@
       background: #FDECEC;
     }
 
-    .msg-bubble img {
-      max-width: 100%;
-      border-radius: 8px;
-      margin: 8px 0;
-      display: block;
+    .msg-bubble img.gp-thumb {
+      width: 120px;
+      height: 80px;
+      object-fit: cover;
+      border-radius: 6px;
+      margin: 6px 6px 6px 0;
+      display: inline-block;
       border: 1px solid #E3E8EF;
+      cursor: zoom-in;
+      vertical-align: top;
+      transition: opacity 0.15s, box-shadow 0.15s;
     }
+    .msg-bubble img.gp-thumb:hover {
+      opacity: 0.85;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+
+    /* Lightbox */
+    #gp-lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.82);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+    }
+    #gp-lightbox.open { display: flex; }
+    #gp-lightbox img {
+      max-width: 92vw;
+      max-height: 88vh;
+      border-radius: 8px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      cursor: default;
+    }
+    #gp-lightbox-close {
+      position: fixed;
+      top: 18px;
+      right: 22px;
+      color: #fff;
+      font-size: 32px;
+      line-height: 1;
+      cursor: pointer;
+      user-select: none;
+      opacity: 0.85;
+    }
+    #gp-lightbox-close:hover { opacity: 1; }
 
     .msg-bubble a {
       color: #DE2A2E;
@@ -293,6 +334,11 @@
   </style>
 </head>
 <body>
+  <!-- Lightbox overlay -->
+  <div id="gp-lightbox" onclick="gpLightboxClose()">
+    <span id="gp-lightbox-close" onclick="gpLightboxClose()">&times;</span>
+    <img id="gp-lightbox-img" src="" alt="" onclick="event.stopPropagation()">
+  </div>
   <div class="chat-container">
     <div class="chat-header">
       <div class="chat-header-icon">💬</div>
@@ -340,9 +386,13 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-      // 2. Images: ![alt](url) — before links so URLs inside aren't double-linked
+      // 2. Images: ![alt](url) — rendered as clickable thumbnails with lightbox
       s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,
-        '<img src="$2" alt="$1" style="max-width:100%;border-radius:8px;margin:8px 0;display:block;">');
+        '<img src="$2" alt="$1" class="gp-thumb" onclick="gpLightbox(this)">+IMGBREAK+');
+      // Group consecutive thumbnails into a flex row then clean up marker
+      s = s.replace(/((<img[^>]+class="gp-thumb"[^>]*>\+IMGBREAK\+)+)/g,
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;">$1</div>');
+      s = s.replace(/\+IMGBREAK\+/g, '');
 
       // 2b. Markdown links: [text](url) — extract and move to bottom as a links section
       const extractedLinks = [];
@@ -596,6 +646,19 @@
       btn.disabled = false;
       input.focus();
     }
+
+    // ── Lightbox ──────────────────────────────────────────────────────────────
+    function gpLightbox(img) {
+      document.getElementById('gp-lightbox-img').src = img.src;
+      document.getElementById('gp-lightbox-img').alt = img.alt;
+      document.getElementById('gp-lightbox').classList.add('open');
+    }
+    function gpLightboxClose() {
+      document.getElementById('gp-lightbox').classList.remove('open');
+    }
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') gpLightboxClose();
+    });
   </script>
 </body>
 </html>
