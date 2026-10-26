@@ -25,7 +25,7 @@ const EMBEDDINGS_PATH = process.env.KB_QA_PATH
   : path.join(__dirname, 'kb-embeddings.json');
 
 // Embedding matching config
-const EMBED_THRESHOLD = 0.82;   // minimum cosine similarity to consider a match
+const EMBED_THRESHOLD = 0.75;   // minimum cosine similarity to consider a match
 const EMBED_MARGIN    = 0.08;   // top match must beat 2nd-best by this much
 
 // Serve uploaded screenshots as static files
@@ -76,7 +76,7 @@ Your answers must be based ONLY on the information in the knowledge document bel
 
 If someone asks something you don't have information about, say: "I don't have information on that — for account-specific questions or issues, please contact GigPost support at support@mygigpost.com."
 
-If someone asks something completely unrelated to GigPost, say: "I can only help with questions about using the GigPost portal."
+Facebook login, Facebook Page access, and connecting a Facebook Page are IN SCOPE — they are required steps for using GigPost. Answer those questions using the KB. Only refuse when the question has nothing to do with GigPost or its setup requirements (e.g. sports, recipes, unrelated tech).
 
 Keep answers concise and practical. Use plain language — these are bar owners, not tech experts. Use bullet points when listing steps. Don't start with phrases like "Great question!" or "Certainly!".
 
@@ -313,13 +313,17 @@ app.post('/chat', async (req, res) => {
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
 
+  const { debug } = req.body;
+
   // ── Step 1: Semantic KB match — return verbatim if confident ─────────────────
   const qa = loadQA().filter(q => q.answer && q.answer.trim());
   try {
     const kbMatch = await findBestKBMatchEmbed(message, qa, apiKey);
     if (kbMatch) {
-      console.log(`[chat] Embed match id=${kbMatch.entry.id} score=${kbMatch.score.toFixed(3)} — verbatim`);
-      return res.json({ reply: kbMatch.entry.answer });
+      console.log(`[chat] Embed match id=${kbMatch.entry.id} score=${kbMatch.score.toFixed(3)} q="${kbMatch.entry.question}" — verbatim`);
+      const payload = { reply: kbMatch.entry.answer };
+      if (debug) payload._debug = { matchedQuestion: kbMatch.entry.question, matchedId: kbMatch.entry.id, score: +kbMatch.score.toFixed(4) };
+      return res.json(payload);
     }
   } catch (e) {
     console.error('[chat] Embed match error (falling through to GPT):', e.message);

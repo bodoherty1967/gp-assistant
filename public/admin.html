@@ -162,7 +162,17 @@
     font-weight: 700;
     color: #111;
     line-height: 1.4;
+    border: none;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    padding: 0;
+    width: 100%;
+    font-family: inherit;
+    outline: none;
+    cursor: text;
   }
+  .qa-question:hover { border-bottom-color: #d1d5db; }
+  .qa-question:focus { border-bottom-color: #DE2A2E; }
   .status-badge {
     flex-shrink: 0;
     padding: 2px 9px;
@@ -388,7 +398,12 @@
       <div class="qa-card ${cardClass}" id="card-${q.id}">
         <div class="qa-top">
           <span class="qa-num">#${displayNum}</span>
-          <div class="qa-question">${esc(q.question)}</div>
+          <input
+            class="qa-question"
+            id="question-${q.id}"
+            type="text"
+            value="${esc(q.question)}"
+          >
           <span class="status-badge ${statusClass}" id="badge-${q.id}">${statusLabel}</span>
         </div>
         <textarea
@@ -542,19 +557,24 @@
   async function saveAnswer(id) {
     const ta = document.getElementById('answer-' + id);
     const answer = ta.value.trim();
+    const questionEl = document.getElementById('question-' + id);
+    const question = questionEl ? questionEl.value.trim() : undefined;
 
     try {
       const res = await fetch('/api/qa/' + id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer })
+        body: JSON.stringify({ answer, ...(question ? { question } : {}) })
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
 
       // Update local state
       const idx = allQA.findIndex(q => q.id === id);
-      if (idx !== -1) allQA[idx].answer = answer;
+      if (idx !== -1) {
+        allQA[idx].answer = answer;
+        if (question) allQA[idx].question = question;
+      }
 
       // Update badge + card class
       const badge = document.getElementById('badge-' + id);
