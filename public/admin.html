@@ -292,18 +292,7 @@
     <h3>Add a New Question</h3>
     <div class="form-row">
       <input type="text" id="newQuestion" placeholder="Question text…" style="flex:2">
-      <select id="newCategory">
-        <option value="General">General</option>
-        <option value="Getting started / account">Getting started / account</option>
-        <option value="Connecting Facebook & Instagram">Connecting Facebook &amp; Instagram</option>
-        <option value="The entertainment calendar">The entertainment calendar</option>
-        <option value="Automatic posting">Automatic posting</option>
-        <option value="Entertainer cards">Entertainer cards</option>
-        <option value="Reels & video">Reels &amp; video</option>
-        <option value="Billing">Billing</option>
-        <option value="Troubleshooting">Troubleshooting</option>
-        <option value="Feature questions">Feature questions</option>
-      </select>
+      <select id="newCategory"><option value="General">General</option></select>
     </div>
     <div class="form-full">
       <textarea id="newAnswer" placeholder="Answer (optional — you can leave blank and fill in later)…" rows="3"></textarea>
@@ -332,11 +321,18 @@
   }
 
   function populateCategoryFilter() {
-    const sel = document.getElementById('filterCat');
-    const current = sel.value;
     const cats = [...new Set(allQA.map(q => q.category).filter(Boolean))].sort();
-    sel.innerHTML = '<option value="">All categories</option>' +
+
+    // Filter dropdown
+    const filterSel = document.getElementById('filterCat');
+    const current = filterSel.value;
+    filterSel.innerHTML = '<option value="">All categories</option>' +
       cats.map(c => `<option value="${esc(c)}"${c===current?' selected':''}>${esc(c)}</option>`).join('');
+
+    // New-question category dropdown — keep in sync with live category list
+    const newSel = document.getElementById('newCategory');
+    const newCurrent = newSel.value;
+    newSel.innerHTML = cats.map(c => `<option value="${esc(c)}"${c===newCurrent?' selected':''}>${esc(c)}</option>`).join('');
   }
 
   function updateStats() {
