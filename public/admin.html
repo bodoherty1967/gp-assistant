@@ -227,6 +227,19 @@
   .link-url { flex: 1.5; }
   .qa-num { font-size: 0.72rem; font-weight: 700; color: #9ca3af; background: #f3f4f6;
     border-radius: 4px; padding: 2px 6px; flex-shrink: 0; letter-spacing: 0.02em; }
+  .qa-stable-id { font-size: 0.68rem; color: #b0b0b0; font-family: monospace; padding: 2px 6px;
+    background: #f8f8f8; border-radius: 4px; border: 1px solid #e5e7eb; flex-shrink: 0; cursor: copy;
+    letter-spacing: 0.01em; title: 'Stable ID'; }
+  .qa-stable-id:hover { background: #f1f5f9; color: #666; }
+  .audience-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;
+    padding: 8px 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e3e8ef; }
+  .audience-row label { font-size: 0.8rem; font-weight: 600; color: #374151; display: flex;
+    align-items: center; gap: 5px; cursor: pointer; }
+  .audience-row input[type=checkbox] { width: 15px; height: 15px; accent-color: #DE2A2E; cursor: pointer; }
+  .audience-row .aud-label { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; color: #9ca3af; }
+  .audience-warn { font-size: 0.75rem; color: #b45309; font-weight: 600; padding: 2px 6px;
+    background: #fef3c7; border-radius: 4px; display: none; }
+  .audience-warn.show { display: inline; }
   .qa-actions { display: flex; gap: 8px; align-items: center; }
   .qa-saved { font-size: 0.8rem; color: #16a34a; font-weight: 600; opacity: 0; transition: opacity 0.3s; }
   .qa-saved.show { opacity: 1; }
@@ -383,17 +396,29 @@
     filtered.forEach(q => renderImgStrip(q.id));
   }
 
+  const SURFACES = ['shared', 'portal', 'homepage', 'entertainers'];
+  const SURFACE_LABELS = { shared: 'Shared (all)', portal: 'Portal', homepage: 'Homepage', entertainers: 'Entertainers' };
+
   function renderCard(q, displayNum) {
     const hasAnswer = q.answer && q.answer.trim();
     const statusClass = hasAnswer ? 'status-verified' : 'status-needs-input';
     const statusLabel = hasAnswer ? '✓ Answered' : '? Needs answer';
     const cardClass = hasAnswer ? 'has-answer' : 'no-answer';
     const areaClass = hasAnswer ? '' : 'empty';
+    const aud = Array.isArray(q.audience) && q.audience.length ? q.audience : ['portal'];
+    const hasNoAudience = aud.length === 0;
+
+    const audCheckboxes = SURFACES.map(s =>
+      `<label><input type="checkbox" id="aud-${s}-${q.id}" ${aud.includes(s) ? 'checked' : ''}
+        onchange="onAudienceChange('${q.id}')">
+        ${SURFACE_LABELS[s]}</label>`
+    ).join('');
 
     return `
       <div class="qa-card ${cardClass}" id="card-${q.id}">
         <div class="qa-top">
           <span class="qa-num">#${displayNum}</span>
+          <span class="qa-stable-id" title="Stable ID — click to copy" onclick="copyId('${q.id}')">${q.id}</span>
           <input
             class="qa-question"
             id="question-${q.id}"
@@ -401,6 +426,11 @@
             value="${esc(q.question)}"
           >
           <span class="status-badge ${statusClass}" id="badge-${q.id}">${statusLabel}</span>
+        </div>
+        <div class="audience-row">
+          <span class="aud-label">SURFACES:</span>
+          ${audCheckboxes}
+          <span class="audience-warn" id="aud-warn-${q.id}">⚠ No surface selected — will not match anywhere</span>
         </div>
         <textarea
           class="qa-answer ${areaClass}"
@@ -423,6 +453,16 @@
         </div>
       </div>
     `;
+  }
+
+  function copyId(id) {
+    navigator.clipboard.writeText(id).then(() => showToast('ID copied: ' + id, 'success'));
+  }
+
+  function onAudienceChange(id) {
+    const selected = SURFACES.filter(s => document.getElementById('aud-' + s + '-' + id)?.checked);
+    const warn = document.getElementById('aud-warn-' + id);
+    if (warn) warn.classList.toggle('show', selected.length === 0);
   }
 
   function insertLink(id) {
@@ -555,12 +595,18 @@
     const answer = ta.value.trim();
     const questionEl = document.getElementById('question-' + id);
     const question = questionEl ? questionEl.value.trim() : undefined;
+    // Collect audience checkboxes
+    const audience = SURFACES.filter(s => document.getElementById('aud-' + s + '-' + id)?.checked);
+    if (audience.length === 0) {
+      showToast('⚠ Select at least one surface before saving', 'error');
+      return;
+    }
 
     try {
       const res = await fetch('/api/qa/' + id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer, ...(question ? { question } : {}) })
+        body: JSON.stringify({ answer, audience, ...(question ? { question } : {}) })
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
@@ -569,6 +615,7 @@
       const idx = allQA.findIndex(q => q.id === id);
       if (idx !== -1) {
         allQA[idx].answer = answer;
+        allQA[idx].audience = audience;
         if (question) allQA[idx].question = question;
       }
 
