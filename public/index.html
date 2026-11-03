@@ -351,17 +351,39 @@
 
     <div class="messages" id="messages">
       <div class="welcome" id="welcome">
-        <h2>Hi! I'm the GigPost Assistant 👋</h2>
-        <p>I can answer questions about how to use the GigPost portal — adding events, managing posts, connecting Facebook, specials, billing, and more.</p>
-        <div class="suggestions">
-          <button class="suggestion-chip" onclick="sendSuggestion(this)">How do I add an event?</button>
-          <button class="suggestion-chip" onclick="sendSuggestion(this)">Why isn't my post going to Instagram?</button>
-          <button class="suggestion-chip" onclick="sendSuggestion(this)">How do I cancel my subscription?</button>
-          
-          <button class="suggestion-chip" onclick="sendSuggestion(this)">How do specials work?</button>
-          <button class="suggestion-chip" onclick="sendSuggestion(this)">How do I add an entertainer?</button>
-        </div>
+        <h2 id="welcome-title">Hi! I'm the GigPost Assistant 👋</h2>
+        <p id="welcome-sub"></p>
+        <div class="suggestions" id="suggestions"></div>
       </div>
+      <script>
+        (function() {
+          const mode = new URLSearchParams(window.location.search).get('mode') || 'portal';
+          const cfg = {
+            portal: {
+              sub: 'I can answer questions about how to use the GigPost portal — adding events, managing posts, connecting Facebook, specials, billing, and more.',
+              chips: ['How do I add an event?', 'Why isn\'t my post going to Instagram?', 'How do I cancel my subscription?', 'How do specials work?', 'How do I add an entertainer?']
+            },
+            general: {
+              sub: 'I can answer general questions about GigPost — what it does, how it works, pricing, and more. Whether you\'re a venue owner or an entertainer, ask away.',
+              chips: ['What does GigPost do?', 'How much does it cost?', 'Is there a free trial?', 'I\'m in a band — is GigPost for me?', 'Will my followers know posts are automated?']
+            },
+            entertainers: {
+              sub: 'I can answer questions about GigPost for entertainers and bands — your profile, social posting, pricing, and how venues use GigPost to promote your shows.',
+              chips: ['How does GigPost help my band?', 'How do I claim my band profile?', 'How much does it cost?', 'Can I post my own shows?', 'What info does GigPost use to promote me?']
+            }
+          };
+          const c = cfg[mode] || cfg.portal;
+          document.getElementById('welcome-sub').textContent = c.sub;
+          const chips = document.getElementById('suggestions');
+          c.chips.forEach(t => {
+            const btn = document.createElement('button');
+            btn.className = 'suggestion-chip';
+            btn.textContent = t;
+            btn.onclick = () => sendSuggestion(btn);
+            chips.appendChild(btn);
+          });
+        })();
+      </script>
     </div>
 
     <div class="chat-input-area">
@@ -442,6 +464,8 @@
       return s;
     }
 
+    // Resolve mode from URL param (?mode=general) or default to portal
+    const GP_MODE = new URLSearchParams(window.location.search).get('mode') || 'portal';
     const history = [];
     let currentAudio = null;
     let currentSpeakBtn = null;
@@ -618,7 +642,7 @@
         const res = await fetch('/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+          body: JSON.stringify({ message: text, history: history.slice(0, -1), mode: GP_MODE })
         });
 
         const data = await res.json();

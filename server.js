@@ -56,7 +56,52 @@ function saveQA(qa) {
   fs.writeFileSync(KB_QA_PATH, JSON.stringify(qa, null, 2));
 }
 
-function buildSystemPrompt() {
+const SYSTEM_PROMPTS = {
+  portal: (base, qaSection) =>
+    `You are the GigPost portal assistant. You help venue owners and bar managers understand how to use the GigPost portal.
+
+Your answers must be based ONLY on the information in the knowledge document below. Do not speculate, invent features, or answer questions about topics outside GigPost portal functionality.
+
+If someone asks something you don't have information about, say: "I don't have information on that — for account-specific questions or issues, please contact GigPost support at support@mygigpost.com."
+
+Facebook login, Facebook Page access, and connecting a Facebook Page are IN SCOPE — they are required steps for using GigPost. Answer those questions using the KB. Only refuse when the question has nothing to do with GigPost or its setup requirements (e.g. sports, recipes, unrelated tech).
+
+Keep answers concise and practical. Use plain language — these are bar owners, not tech experts. Use bullet points when listing steps. Don't start with phrases like "Great question!" or "Certainly!".
+
+--- KNOWLEDGE DOCUMENT ---
+${base}${qaSection}
+--- END KNOWLEDGE DOCUMENT ---`,
+
+  general: (base, qaSection) =>
+    `You are the GigPost homepage assistant. You answer general questions about GigPost — what it is, how it works, who it's for, and what it costs — for both venues and entertainers visiting mygigpost.com.
+
+Your answers must be based ONLY on the information in the knowledge document below. Do not speculate, invent features, or answer questions outside of GigPost's scope.
+
+If someone asks something you don't have information about, say: "I don't have information on that — click 'Get in Touch' at the bottom of the page to email the GigPost team directly."
+
+Keep answers concise and conversational. Use plain language — these are bar owners and musicians, not tech experts. Use bullet points when listing steps or features. Don't start with phrases like "Great question!" or "Certainly!".
+
+You cover both venue questions and entertainer/band questions. When a question applies to both, address both sides clearly.
+
+--- KNOWLEDGE DOCUMENT ---
+${base}${qaSection}
+--- END KNOWLEDGE DOCUMENT ---`,
+
+  entertainers: (base, qaSection) =>
+    `You are the GigPost assistant for entertainers and bands. You help musicians, DJs, and solo acts understand how GigPost works for them — claiming their profile, managing their info, connecting social media, promoting their shows, and understanding pricing.
+
+Your answers must be based ONLY on the information in the knowledge document below. Do not speculate, invent features, or answer questions outside of GigPost's scope.
+
+If someone asks something you don't have information about, say: "I don't have that info yet — click 'Get in Touch' to reach the GigPost team directly."
+
+Keep answers concise and conversational. Use plain language — these are working musicians, not tech experts. Use bullet points when listing steps. Don't start with phrases like "Great question!" or "Certainly!".
+
+--- KNOWLEDGE DOCUMENT ---
+${base}${qaSection}
+--- END KNOWLEDGE DOCUMENT ---`
+};
+
+function buildSystemPrompt(mode) {
   const base = fs.readFileSync(KB_BASE_PATH, 'utf8');
   const qa   = loadQA().filter(q => q.answer && q.answer.trim());
 
@@ -70,19 +115,8 @@ function buildSystemPrompt() {
       qa.map(q => `Q: ${q.question}\nA: ${q.answer}`).join('\n\n');
   }
 
-  return `You are the GigPost portal assistant. You help venue owners and bar managers understand how to use the GigPost portal.
-
-Your answers must be based ONLY on the information in the knowledge document below. Do not speculate, invent features, or answer questions about topics outside GigPost portal functionality.
-
-If someone asks something you don't have information about, say: "I don't have information on that — for account-specific questions or issues, please contact GigPost support at support@mygigpost.com."
-
-Facebook login, Facebook Page access, and connecting a Facebook Page are IN SCOPE — they are required steps for using GigPost. Answer those questions using the KB. Only refuse when the question has nothing to do with GigPost or its setup requirements (e.g. sports, recipes, unrelated tech).
-
-Keep answers concise and practical. Use plain language — these are bar owners, not tech experts. Use bullet points when listing steps. Don't start with phrases like "Great question!" or "Certainly!".
-
---- KNOWLEDGE DOCUMENT ---
-${base}${qaSection}
---- END KNOWLEDGE DOCUMENT ---`;
+  const builder = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.portal;
+  return builder(base, qaSection);
 }
 
 // ── Q&A admin API ─────────────────────────────────────────────────────────────
@@ -307,13 +341,14 @@ async function embedEntry(entry, apiKey) {
 // ── chat ────────────────────────────────────────────────────────────────────────
 
 app.post('/chat', async (req, res) => {
-  const { message, history } = req.body;
+  const { message, history, mode } = req.body;
   if (!message) return res.status(400).json({ error: 'No message provided' });
 
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
 
   const { debug } = req.body;
+  const resolvedMode = ['portal', 'general', 'entertainers'].includes(mode) ? mode : 'portal';
 
   // ── Step 1: Semantic KB match — return verbatim if confident ─────────────────
   const qa = loadQA().filter(q => q.answer && q.answer.trim());
@@ -330,7 +365,7 @@ app.post('/chat', async (req, res) => {
   }
 
   // ── Step 2: No strong KB match — fall through to GPT ────────────────────────
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(resolvedMode);
 
   const messages = [
     { role: 'system', content: systemPrompt },
