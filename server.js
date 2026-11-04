@@ -30,8 +30,8 @@ const AUDIT_LOG_PATH = process.env.KB_QA_PATH
   : path.join(__dirname, 'audit.jsonl');
 
 // Embedding matching config
-const EMBED_THRESHOLD = 0.72;   // minimum cosine similarity to consider a match (lowered from 0.75; q+a embeddings shift score distributions)
-const EMBED_MARGIN    = 0.06;   // top match must beat 2nd-best by this much (balanced: q+a embeddings make clusters more distinct, allowing small margin reduction)
+const EMBED_THRESHOLD = 0.65;   // minimum cosine similarity to consider a match (q+a embeddings: query=question vs stored=q+a shifts similarity scale down; 0.65 calibrated to this)
+const EMBED_MARGIN    = 0.06;   // top match must beat 2nd-best by this much
 
 // ── Rate limiting (IP-based, /chat only) ─────────────────────────────────────
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
