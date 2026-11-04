@@ -435,7 +435,10 @@ async function embedEntry(entry, apiKey) {
   if (!entry.question) return;
   try {
     const embs = loadEmbeddings();
-    embs[entry.id] = await openaiEmbed(entry.question, apiKey);
+    // Embed question + answer so near-duplicate question clusters get distinct vectors.
+    // The answer is unique per entry even when questions are semantically similar.
+    const text = entry.answer ? `${entry.question}\n${entry.answer}` : entry.question;
+    embs[entry.id] = await openaiEmbed(text, apiKey);
     saveEmbeddings(embs);
   } catch (e) {
     console.error(`[embed] Failed for ${entry.id}:`, e.message);
@@ -566,7 +569,8 @@ app.post('/api/embed-all', async (req, res) => {
   for (const entry of todo) {
     try {
       const fresh = loadEmbeddings();
-      fresh[entry.id] = await openaiEmbed(entry.question, apiKey);
+      const embedText = entry.answer ? `${entry.question}\n${entry.answer}` : entry.question;
+      fresh[entry.id] = await openaiEmbed(embedText, apiKey);
       saveEmbeddings(fresh);
       done++;
       if (done % 10 === 0) console.log(`[embed-all] ${done}/${todo.length}`);
