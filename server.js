@@ -30,8 +30,8 @@ const AUDIT_LOG_PATH = process.env.KB_QA_PATH
   : path.join(__dirname, 'audit.jsonl');
 
 // Embedding matching config
-const EMBED_THRESHOLD = 0.65;   // minimum cosine similarity to consider a match (q+a embeddings: query=question vs stored=q+a shifts similarity scale down; 0.65 calibrated to this)
-const EMBED_MARGIN    = 0.06;   // top match must beat 2nd-best by this much
+const EMBED_THRESHOLD = 0.75;   // minimum cosine similarity to consider a match
+const EMBED_MARGIN    = 0.08;   // top match must beat 2nd-best by this much
 
 // ── Rate limiting (IP-based, /chat only) ─────────────────────────────────────
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
@@ -435,10 +435,7 @@ async function embedEntry(entry, apiKey) {
   if (!entry.question) return;
   try {
     const embs = loadEmbeddings();
-    // Embed question + answer so near-duplicate question clusters get distinct vectors.
-    // The answer is unique per entry even when questions are semantically similar.
-    const text = entry.answer ? `${entry.question}\n${entry.answer}` : entry.question;
-    embs[entry.id] = await openaiEmbed(text, apiKey);
+    embs[entry.id] = await openaiEmbed(entry.question, apiKey);
     saveEmbeddings(embs);
   } catch (e) {
     console.error(`[embed] Failed for ${entry.id}:`, e.message);
@@ -570,8 +567,7 @@ app.post('/api/embed-all', async (req, res) => {
   for (const entry of todo) {
     try {
       const fresh = loadEmbeddings();
-      const embedText = entry.answer ? `${entry.question}\n${entry.answer}` : entry.question;
-      fresh[entry.id] = await openaiEmbed(embedText, apiKey);
+      fresh[entry.id] = await openaiEmbed(entry.question, apiKey);
       saveEmbeddings(fresh);
       done++;
       if (done % 10 === 0) console.log(`[embed-all] ${done}/${todo.length}`);
