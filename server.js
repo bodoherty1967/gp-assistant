@@ -559,7 +559,8 @@ app.post('/api/embed-all', async (req, res) => {
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY' });
   const qa   = loadQA().filter(q => q.question && q.answer && q.answer.trim());
   const embs = loadEmbeddings();
-  const todo = qa.filter(q => !embs[q.id]);
+  const force = req.query.force === 'true';
+  const todo = qa.filter(q => force || !embs[q.id]);
   if (todo.length === 0) return res.json({ ok: true, embedded: 0, message: 'All already embedded' });
 
   res.json({ ok: true, total: todo.length, message: `Embedding ${todo.length} questions in background…` });
