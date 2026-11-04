@@ -100,11 +100,14 @@ function appendAudit(action, entryId, changes) {
 // A Q&A is eligible if its audience array includes 'shared' OR the mode itself.
 // If a Q&A has no audience field (legacy/untagged), it defaults to ['portal'].
 // 'shared' always wins: shared + any surface = visible everywhere.
+// 'general' mode serves the homepage assistant and also includes 'homepage'-tagged Q&As.
 function audienceMatchesMode(entry, mode) {
   const aud = Array.isArray(entry.audience) && entry.audience.length > 0
     ? entry.audience
     : ['portal']; // safe default for untagged (legacy portal Q&As)
-  return aud.includes('shared') || aud.includes(mode);
+  if (aud.includes('shared')) return true;
+  if (mode === 'general' && aud.includes('homepage')) return true;
+  return aud.includes(mode);
 }
 
 // Pinned facts for general mode no-match fallback.
