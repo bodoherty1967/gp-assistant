@@ -3,7 +3,12 @@ const fs      = require('fs');
 const path    = require('path');
 const https   = require('https');
 
+const { createAdminAuth } = require('./admin-auth');
+
 const app = express();
+// Before express.json and express.static: the KB editor and /api/* need the
+// admin password, and an unauthenticated upload should not be parsed at all.
+app.use(createAdminAuth({ password: process.env.ADMIN_PASSWORD }));
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
