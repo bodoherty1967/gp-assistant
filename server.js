@@ -496,6 +496,18 @@ app.post('/chat', rateLimitMiddleware, async (req, res) => {
     return res.json(payload);
   }
 
+  // ── Step 1c: Entertainer mode no-match → honest "no answer yet" + email (never GPT) ──
+  // GPT's only document (GigPost_Assistant_Knowledge.md) is written for venues, so in this mode it
+  // answered bands with venue steps (+ Add Event, Choose Entertainer(s)). The shared pinned facts
+  // are venue-worded too ("Is my venue's data private?"). Sticks spec v5 A.2.3: no venue portal
+  // procedures in this mode. Add the question to the KB Editor (Entertainer Portal) to answer it.
+  if (resolvedMode === 'entertainers') {
+    const reply = "I don't have a verified answer for that yet, so I won't guess. Please email us at hello@mygigpost.com and the team will help.";
+    const payload = { reply };
+    if (debug) payload._debug = { mode: resolvedMode, matchedQuestion: null, matchedId: null, noMatchFallback: true };
+    return res.json(payload);
+  }
+
   // ── Step 2: No strong KB match — fall through to GPT ────────────────────────
   const systemPrompt = buildSystemPrompt(resolvedMode);
 
