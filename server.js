@@ -58,6 +58,21 @@ function rateLimitMiddleware(req, res, next) {
   next();
 }
 
+// Only the GigPost server may call /chat once ASSISTANT_KEY is set: it sends the same value as
+// x-assistant-key (its GP_ASSISTANT_KEY). Otherwise anyone who knows this address can call /chat
+// directly, around GigPost's rate limits, and every unmatched portal question is a paid GPT call.
+// Unset, /chat stays open as before. Note: the test page at / calls /chat from the browser, so its
+// chat stops working once the key is set (the GigPost widget is unaffected).
+// Checked before the rate limit, so refused callers do not use up the real caller's allowance.
+function sha256(s) { return require('crypto').createHash('sha256').update(String(s), 'utf8').digest(); }
+function callerKey(req, res, next) {
+  const key = process.env.ASSISTANT_KEY;
+  if (!key) return next();
+  const given = req.headers['x-assistant-key'];
+  if (typeof given === 'string' && require('crypto').timingSafeEqual(sha256(given), sha256(key))) return next();
+  return res.status(401).json({ error: 'Not allowed.' });
+}
+
 // Serve uploaded screenshots as static files
 app.use('/screenshots', (req, res, next) => {
   express.static(SCREENSHOTS_DIR)(req, res, next);
@@ -462,7 +477,7 @@ app.get('/api/audit', (req, res) => {
 
 // ── chat ────────────────────────────────────────────────────────────────────────
 
-app.post('/chat', rateLimitMiddleware, async (req, res) => {
+app.post('/chat', callerKey, rateLimitMiddleware, async (req, res) => {
   const { message, history, mode } = req.body;
   if (!message) return res.status(400).json({ error: 'No message provided' });
 

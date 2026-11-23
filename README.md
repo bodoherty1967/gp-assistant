@@ -14,6 +14,7 @@ AI-powered portal assistant for GigPost venue clients.
 | `KB_QA_PATH` | optional | Path to kb-qa.json (default: `./kb-qa.json`). On Render, set to `/data/kb-qa.json` |
 | `KB_BASE_PATH` | optional | Path to base knowledge doc (default: `./GigPost_Assistant_Knowledge.md`) |
 | `PORT` | optional | Server port (default: 4242, Render sets this automatically) |
+| `ASSISTANT_KEY` | recommended | A long random value. When set, `/chat` answers only callers that send it as the `x-assistant-key` header (the GigPost server, which sends its `GP_ASSISTANT_KEY`). Set the same value on both services. The test page's chat at `/` stops working while it is set. |
 
 ## Render Deployment
 
