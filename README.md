@@ -25,4 +25,4 @@ AI-powered portal assistant for GigPost venue clients.
 
 ## Tests
 
-`npm test` starts the server on a free port with a throwaway KB file and checks the KB editor password gate.
+`npm test` starts the server on a free port with a throwaway KB file and checks the KB editor password gate, the `ASSISTANT_KEY` check, the entertainer no-match reply, and the limits on `/chat` and `/tts`. No test calls OpenAI.

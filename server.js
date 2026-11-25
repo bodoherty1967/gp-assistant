@@ -4,12 +4,16 @@ const path    = require('path');
 const https   = require('https');
 
 const { createAdminAuth } = require('./admin-auth');
+const { cleanHistory, MESSAGE_MAX } = require('./chat-input');
 
 const app = express();
 // Before express.json and express.static: the KB editor and /api/* need the
 // admin password, and an unauthenticated upload should not be parsed at all.
 app.use(createAdminAuth({ password: process.env.ADMIN_PASSWORD }));
-app.use(express.json({ limit: '15mb' }));
+// Large bodies only for the password-gated /api routes (base64 screenshot uploads). The public
+// /chat and /tts get a small limit: the GigPost proxy's largest request is about 120 KB.
+app.use('/api', express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── paths (env vars allow Render persistent disk override) ────────────────────
@@ -329,9 +333,13 @@ app.post('/api/upload-image', (req, res) => {
 
 // ── TTS ──────────────────────────────────────────────────────────────────────
 
-app.post('/tts', (req, res) => {
-  const { text } = req.body;
-  if (!text) return res.status(400).json({ error: 'No text provided' });
+// Paid OpenAI speech: the same caller key and per-address limit as /chat, and OpenAI's own
+// 4096-character cap checked here, so an over-long text is refused before any call.
+const TTS_TEXT_MAX = 4096;
+app.post('/tts', callerKey, rateLimitMiddleware, (req, res) => {
+  const { text } = req.body || {};
+  if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'No text provided' });
+  if (text.length > TTS_TEXT_MAX) return res.status(400).json({ error: `Text is over ${TTS_TEXT_MAX} characters.` });
 
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
@@ -478,8 +486,9 @@ app.get('/api/audit', (req, res) => {
 // ── chat ────────────────────────────────────────────────────────────────────────
 
 app.post('/chat', callerKey, rateLimitMiddleware, async (req, res) => {
-  const { message, history, mode } = req.body;
-  if (!message) return res.status(400).json({ error: 'No message provided' });
+  const { message, history, mode } = req.body || {};
+  if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'No message provided' });
+  if (message.length > MESSAGE_MAX) return res.status(400).json({ error: `Please keep it under ${MESSAGE_MAX} characters.` });
 
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
@@ -528,7 +537,7 @@ app.post('/chat', callerKey, rateLimitMiddleware, async (req, res) => {
 
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...(history || []),
+    ...cleanHistory(history),
     { role: 'user', content: message }
   ];
 
