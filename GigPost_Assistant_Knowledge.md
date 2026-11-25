@@ -1,14 +1,14 @@
 # GigPost Portal — AI Assistant Knowledge Document
-# Version 4 — Code-verified (Oct 13 2026, sources: codebase + merged PRs only)
+# Version 6 — Updated Nov 25 2026 (pricing, trial, Concierge removal, fallback instruction, held posts, poster count, notifications, specials timing, QuickPost, entertainer videos)
 
 ## PURPOSE OF THIS DOCUMENT
-This document is the authoritative knowledge base for the GigPost portal AI assistant. The assistant answers questions **only** about how the GigPost portal works. For anything outside portal functionality, the assistant should say: "I can only help with questions about using the GigPost portal."
+This document is the authoritative knowledge base for the GigPost portal AI assistant. The assistant answers questions **only** about how the GigPost portal works. For anything it doesn't have an answer to, the assistant should say it doesn't have that information yet and direct the user to Get in Touch (hello@mygigpost.com). The assistant should **not** tell users their question is out of scope — if the question is about using GigPost, respond with the don't-know fallback rather than a refusal.
 
 ---
 
 ## WHAT IS GIGPOST?
 
-GigPost is a social media automation tool for bars and live music venues. It automatically creates and schedules posts to Facebook and Instagram whenever a venue books a live entertainer or runs a special event. Venues add their events once; GigPost handles writing captions, generating promotional images, and posting them on a timed schedule — without the venue having to log into Facebook each time.
+GigPost is a social media automation tool for bars and live music venues. Venues add an event and set up posts; GigPost then handles writing captions, generating promotional images, and sending them on the schedule the venue set — without the venue having to log into Facebook each time.
 
 **GigPost posts to:** Facebook Page and Instagram (Instagram connects through the same Facebook link — no separate Instagram login needed).
 
@@ -44,7 +44,6 @@ New accounts see a 3-step setup card on the Dashboard:
 The Dashboard is the home screen. It shows:
 
 - **Facebook / Instagram connection status** chips
-- **Health score tile** — 100-point score measuring how actively GigPost is working for your venue (see Health Score section below)
 - **People reached, Reactions, Next post** stat tiles
 - **KPI cards** — Scheduled Posts, Upcoming events, Entertainment costs, Avg. cost/show — filterable by Next 7 / 30 / 90 days or All time
 - **Upcoming events** list — accordion cards that expand to show the posts scheduled for each event; filterable by timeframe
@@ -111,7 +110,7 @@ On the Create posts screen, you choose:
 Choose which days before the show to post. Your account's default schedule is pre-selected. Options include: 14 days before, 10 days before, 7 days before, 5 days before, 3 days before, Day before, Day of show. You can select multiple.
 
 **3. Choose a poster style (or reel style)**
-- For Graphics: a grid of 8 poster styles. Pick the one you want.
+- For Graphics: a grid of 11 poster styles. Pick the one you want.
 - For Reels: a grid of reel style options, each previewed with your event's own photo.
 - For Reach Mode: you pick both a poster style (for the Graphic) and a reel style (for the Reel).
 - If you have multiple posts, each can have its own style. "Same style for all posts" starts unchecked — tap a style to apply it to the currently selected post, or check the box to apply one style to all.
@@ -134,7 +133,7 @@ When adding an event you can set it to repeat (weekly, every 2 weeks, monthly, e
 ## POST FORMATS — GRAPHIC, REEL, AND REACH MODE
 
 ### Graphic
-A promotional poster image. GigPost composites the act's photo (or an AI-generated background) with the venue name, act name, date, and show time. You choose from 8 poster styles.
+A promotional poster image. GigPost composites the act's photo (or an AI-generated background) with the venue name, act name, date, and show time. You choose from 11 poster styles.
 
 ### Reel
 A short (~10 second) video post. GigPost renders the reel from the act's photo, adds animated text (act name, venue, date), and attaches a music soundtrack matched to the genre. Reels are posted to Facebook Reels and Instagram Reels.
@@ -242,7 +241,7 @@ The deletion can't be undone.
 
 ### New Post (not tied to an event)
 Use **+ New post** (or the Quick Post entry) to create a standalone post for anything that isn't a booked event. Three types:
-- **Image Post** — describe what it's about, GigPost generates or pulls a photo and writes a caption
+- **Image Post** — upload up to 10 photos; GigPost writes a caption. Can be posted now or scheduled for a later date and time ("Send later").
 - **Video** — upload a video (MP4 or MOV, up to 90 seconds) or choose from your library; GigPost writes a caption
 - **Color Card** — your own words on a solid coloured background, no photo needed
 
@@ -258,6 +257,7 @@ Your saved roster of acts.
 - **Genre** (optional) — free text, e.g. "Folk", "Classic Rock", "Celtic"
 - **Bio** (optional) — used by GigPost's AI to write captions. A few sentences about the act, their style, and what crowds love
 - **Promo photos** (optional, up to 5) — used as the event poster image
+- **Videos** (optional, up to 3) — available to use as reel source footage
 - **Contact details** (optional) — contact name, phone, email
 - **Links** (optional) — website, Facebook page, Instagram
 
@@ -271,7 +271,7 @@ Click **+ Add Entertainer**. As you type the name, GigPost searches its band dat
 - Search by name, genre, or act type
 
 ### Rating an act
-After a show, GigPost prompts you to rate the act (via notification the day after). Ratings help sort your roster and improve the Health Score.
+After a show, GigPost prompts you to rate the act (via notification the day after). Ratings help sort your roster.
 
 ### Emailing an entertainer
 Open an entertainer's profile and tap **Email** to send a message directly from the portal.
@@ -303,6 +303,8 @@ Promote food and drink deals — Happy Hour, Taco Tuesday, Wing Night, etc.
   - Set start date and optional end date
   - The posting hint updates to show the schedule, e.g. "Posts every Tuesday & Thursday"
 - **One-time** — runs on a specific date only
+
+**When specials post:** For timed specials, the post goes out 2 hours before the start time (minimum 9:00 AM local). All-day specials post at 11:00 AM.
 
 ### Managing specials
 - Filter by All / Recurring / One-time
@@ -358,7 +360,7 @@ Set your brand colours, logo, and poster style. GigPost uses these on every post
 Turn notifications on or off. Choose delivery method: **Email**, **Text (SMS)**, or **Both**. SMS requires agreeing to terms.
 
 Notification types available:
-- **Posting problems** — alerts when a post fails (on by default, can't be turned off)
+- **Posting problems** — alerts when a post fails (on by default)
 - **Post went live** — when a scheduled post is published to Facebook
 - **Rate your act** — the day after a show with no rating saved
 - **Weekly lineup posted** — when your weekly lineup goes out
@@ -369,22 +371,17 @@ Notification types available:
 
 Two plans:
 
-**GigPost Self-Serve — $99/month**
-- Includes a one-time setup fee of $199
-- During the free trial, no charge. On day 30, $298 is charged ($99 first month + $199 setup fee as one combined invoice). Monthly $99 from then on.
-
-**GigPost Concierge — $249/month**
-- Setup is included in the monthly price (no separate setup fee)
-
-Both plans start with a **30-day free trial** (no charge during trial).
+**GigPost — $39/month**
+- 30-day free trial, no card required at signup
+- No charge at day 30 — if you haven't subscribed by the end of the trial, posting pauses into the held queue. Subscribe at any time to resume.
+- Monthly $39 after subscribing. No setup fee.
 
 Subscription status and trial end date are shown in **Account & Settings → Subscription**.
 
-- **Subscribe · $99/mo** button appears if you haven't subscribed yet
+- **Subscribe · $39/mo** button appears if you haven't subscribed yet
 - **Manage subscription** opens Stripe's billing portal to update your card, cancel, or reopen a cancelled plan
 - Cancelling during a trial: posting stops at end of trial, you won't be charged
 - Cancelling an active subscription: access continues until the end of the billing period
-- There is also a **View other plans** option to compare Self-Serve vs Concierge
 
 ---
 
@@ -405,20 +402,6 @@ GigPost can automatically post weekly and monthly lineup boards — summary imag
 
 ### Community page sharing
 Your weekly lineup can be shared to the GigPost community Facebook page for extra exposure. Toggle on/off in Lineup settings.
-
----
-
-## HEALTH SCORE
-
-The Health Score (shown on the Dashboard) is a 100-point measure of how actively GigPost is working for your venue. It has five components:
-
-1. **Posting Consistency (30 pts)** — How many posts in the last 30 days vs. your expected volume (based on your weekly event count setting)
-2. **Entertainer Engagement (20 pts)** — How consistently you're booking entertainers
-3. **Lineup Posts (25 pts)** — Whether your weekly and/or monthly lineup boards are being posted
-4. **Event Ratings (15 pts)** — How many of your past shows you've rated
-5. **Post Engagement (10 pts)** — Real Facebook performance data (reach, reactions, clicks)
-
-Each component shows a tip explaining how to improve it. If your venue profile isn't complete (weekly event count not set), some scores show as locked until that's filled in.
 
 ---
 
@@ -503,7 +486,7 @@ A: Yes. Open the post and edit the caption directly. Save your changes — the s
 A: No — GigPost can't edit a post that's already live on Facebook. You would need to edit it directly in Facebook.
 
 **Q: A post went out with an old caption / wrong image. What happened?**
-A: If you edited an event (changed the date, time, or act name), GigPost redraws affected posts and holds them for your review. If those held posts weren't approved, they were sent as-is. Always check the yellow "Needs review" notice after editing an event and approve the redrawn versions before the scheduled send time.
+A: If you edited an event (changed the date, time, or act name), GigPost redraws affected posts and holds them for your review — they will NOT go out until you approve them. Always check the yellow "Needs review" notice after editing an event and approve the redrawn versions before the scheduled send time.
 
 **Q: What's the difference between a Reel and a Graphic?**
 A: A Graphic is a still promotional poster image. A Reel is a short video (~10 seconds) with animation and music. Both are posted to Facebook and Instagram. Reels generally get higher reach because both platforms promote video content. If your account has Reels & Stories enabled, you can choose the format when creating posts.
@@ -525,9 +508,6 @@ A: GigPost warns you before creating a second booking. Choose "Open that event" 
 
 **Q: What does "Needs review" mean?**
 A: When you edit an event's date, time, or act name, GigPost redraws the affected posts. While redrawing, those posts are held and marked "Needs review." They will not go out until you review and approve them. Open the event and tap Check to see the redrawn versions and approve or reject each one.
-
-**Q: What's the Health Score and how do I improve it?**
-A: The Health Score is a 0–100 rating of how actively GigPost is working for you. It considers: how consistently you're posting (30 pts), how often you're booking acts (20 pts), whether you're running weekly/monthly lineups (25 pts), how many past shows you've rated (15 pts), and actual engagement from Facebook (10 pts). Tips for each component appear next to the score on the Dashboard.
 
 **Q: How do I set up a recurring event?**
 A: When creating a new event, there's a recurring option where you set the frequency (weekly, every 2 weeks, monthly, etc.) and start/end dates. Each occurrence generates its own posts on the same schedule. You can edit a single occurrence or all future ones from the Calendar.
@@ -588,6 +568,4 @@ The GigPost Assistant can only answer questions about using the portal. For the 
 - **Technical errors** — posts failing to publish, images not generating
 - **Cancelling or changing your plan** — contact support or use the Stripe billing portal link in Account & Settings
 - **Refunds or billing disputes**
-- **Questions about the GigPost Concierge service** — what's included, how to sign up
-
-For anything the assistant couldn't help with: **support@mygigpost.com**
+For anything the assistant couldn't help with: **hello@mygigpost.com**
