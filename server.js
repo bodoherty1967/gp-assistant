@@ -3,8 +3,17 @@ const fs      = require('fs');
 const path    = require('path');
 const https   = require('https');
 
+const { createAdminAuth } = require('./admin-auth');
+const { cleanHistory, MESSAGE_MAX } = require('./chat-input');
+
 const app = express();
-app.use(express.json({ limit: '15mb' }));
+// Before express.json and express.static: the KB editor and /api/* need the
+// admin password, and an unauthenticated upload should not be parsed at all.
+app.use(createAdminAuth({ password: process.env.ADMIN_PASSWORD }));
+// Large bodies only for the password-gated /api routes (base64 screenshot uploads). The public
+// /chat and /tts get a small limit: the GigPost proxy's largest request is about 120 KB.
+app.use('/api', express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── paths (env vars allow Render persistent disk override) ────────────────────
@@ -51,6 +60,21 @@ function rateLimitMiddleware(req, res, next) {
     return res.status(429).json({ error: 'Too many requests — please wait a moment and try again.' });
   }
   next();
+}
+
+// Only the GigPost server may call /chat once ASSISTANT_KEY is set: it sends the same value as
+// x-assistant-key (its GP_ASSISTANT_KEY). Otherwise anyone who knows this address can call /chat
+// directly, around GigPost's rate limits, and every unmatched portal question is a paid GPT call.
+// Unset, /chat stays open as before. Note: the test page at / calls /chat from the browser, so its
+// chat stops working once the key is set (the GigPost widget is unaffected).
+// Checked before the rate limit, so refused callers do not use up the real caller's allowance.
+function sha256(s) { return require('crypto').createHash('sha256').update(String(s), 'utf8').digest(); }
+function callerKey(req, res, next) {
+  const key = process.env.ASSISTANT_KEY;
+  if (!key) return next();
+  const given = req.headers['x-assistant-key'];
+  if (typeof given === 'string' && require('crypto').timingSafeEqual(sha256(given), sha256(key))) return next();
+  return res.status(401).json({ error: 'Not allowed.' });
 }
 
 // Serve uploaded screenshots as static files
@@ -309,9 +333,13 @@ app.post('/api/upload-image', (req, res) => {
 
 // ── TTS ──────────────────────────────────────────────────────────────────────
 
-app.post('/tts', (req, res) => {
-  const { text } = req.body;
-  if (!text) return res.status(400).json({ error: 'No text provided' });
+// Paid OpenAI speech: the same caller key and per-address limit as /chat, and OpenAI's own
+// 4096-character cap checked here, so an over-long text is refused before any call.
+const TTS_TEXT_MAX = 4096;
+app.post('/tts', callerKey, rateLimitMiddleware, (req, res) => {
+  const { text } = req.body || {};
+  if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ error: 'No text provided' });
+  if (text.length > TTS_TEXT_MAX) return res.status(400).json({ error: `Text is over ${TTS_TEXT_MAX} characters.` });
 
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
@@ -457,9 +485,10 @@ app.get('/api/audit', (req, res) => {
 
 // ── chat ────────────────────────────────────────────────────────────────────────
 
-app.post('/chat', rateLimitMiddleware, async (req, res) => {
-  const { message, history, mode } = req.body;
-  if (!message) return res.status(400).json({ error: 'No message provided' });
+app.post('/chat', callerKey, rateLimitMiddleware, async (req, res) => {
+  const { message, history, mode } = req.body || {};
+  if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'No message provided' });
+  if (message.length > MESSAGE_MAX) return res.status(400).json({ error: `Please keep it under ${MESSAGE_MAX} characters.` });
 
   const apiKey = process.env.OPENAI_KEY;
   if (!apiKey) return res.status(500).json({ error: 'No OPENAI_KEY configured' });
@@ -491,12 +520,24 @@ app.post('/chat', rateLimitMiddleware, async (req, res) => {
     return res.json(payload);
   }
 
+  // ── Step 1c: Entertainer mode no-match → honest "no answer yet" + email (never GPT) ──
+  // GPT's only document (GigPost_Assistant_Knowledge.md) is written for venues, so in this mode it
+  // answered bands with venue steps (+ Add Event, Choose Entertainer(s)). The shared pinned facts
+  // are venue-worded too ("Is my venue's data private?"). Sticks spec v5 A.2.3: no venue portal
+  // procedures in this mode. Add the question to the KB Editor (Entertainer Portal) to answer it.
+  if (resolvedMode === 'entertainers') {
+    const reply = "I don't have a verified answer for that yet, so I won't guess. Please email us at hello@mygigpost.com and the team will help.";
+    const payload = { reply };
+    if (debug) payload._debug = { mode: resolvedMode, matchedQuestion: null, matchedId: null, noMatchFallback: true };
+    return res.json(payload);
+  }
+
   // ── Step 2: No strong KB match — fall through to GPT ────────────────────────
   const systemPrompt = buildSystemPrompt(resolvedMode);
 
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...(history || []),
+    ...cleanHistory(history),
     { role: 'user', content: message }
   ];
 
